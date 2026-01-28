@@ -3,52 +3,51 @@ import shutil
 import subprocess
 from pathlib import Path
 
-def deep_clean_browsers():
+def deep_clean_firefox():
     home = Path.home()
     user = os.getlogin()
 
-    # Kill processes first - crucial because SQLite files are locked while open
-    subprocess.run(["pkill", "-u", user, "chrome"], stderr=subprocess.DEVNULL)
+    # 1. Kill Firefox - SQLite files are locked while the process is active
+    print("Closing Firefox...")
     subprocess.run(["pkill", "-u", user, "firefox"], stderr=subprocess.DEVNULL)
 
-    # 1. CHROME TARGETS
-    chrome_base = home / ".config/google-chrome/Default"
-    chrome_targets = [
-        chrome_base / "Cookies",
-        chrome_base / "Cookies-journal",
-        chrome_base / "Local Storage",
-        chrome_base / "Session Storage",
-        home / ".cache/google-chrome" # The actual cache
-    ]
+    # 2. Define the Root Directories
+    config_dir = home / ".mozilla/firefox"
+    cache_root = home / ".cache/mozilla/firefox"
 
-    # 2. FIREFOX TARGETS
-    firefox_base = home / ".mozilla/firefox"
-    # Note: Firefox keeps cookies in the profile root, not the .cache folder
-    
-    # Clean Chrome
-    for path in chrome_targets:
+    # 3. Wipe the Cache (The heavy files)
+    if cache_root.exists():
         try:
-            if path.is_dir():
-                shutil.rmtree(path, ignore_errors=True)
-            elif path.is_file():
-                path.unlink(missing_ok=True)
+            shutil.rmtree(cache_root)
+            print("Wiped all Firefox cache files.")
         except Exception as e:
-            print(f"Error cleaning Chrome path {path}: {e}")
+            print(f"Error clearing cache: {e}")
 
-    # Clean Firefox Profiles
-    if firefox_base.exists():
-        # Firefox profiles are folders like 'abc123xy.default-release'
-        for profile in firefox_base.glob("*default*"):
-            try:
-                # cookies.sqlite is what keeps them logged in
-                (profile / "cookies.sqlite").unlink(missing_ok=True)
-                (profile / "cookies.sqlite-wal").unlink(missing_ok=True)
-                # storage/default holds site-specific login data/tokens
-                shutil.rmtree(profile / "storage", ignore_errors=True)
-                print(f"Logged out of Firefox profile: {profile.name}")
-            except Exception as e:
-                print(f"Error cleaning Firefox profile {profile}: {e}")
+    # 4. Wipe the Session Data (The login/account info)
+    if config_dir.exists():
+        # Firefox profiles are folders like 'x3j9l2.default-release'
+        for profile in config_dir.glob("*default*"):
+            # Files and folders to delete to ensure logout
+            logout_targets = [
+                profile / "cookies.sqlite",
+                profile / "cookies.sqlite-wal",
+                profile / "cookies.sqlite-shm",
+                profile / "sessionstore-backups",
+                profile / "storage", # This is where 'Local Storage' & tokens live
+                profile / "formhistory.sqlite" # Optional: clears saved form data
+            ]
+
+            for target in logout_targets:
+                try:
+                    if target.is_dir():
+                        shutil.rmtree(target, ignore_errors=True)
+                    else:
+                        target.unlink(missing_ok=True)
+                except Exception as e:
+                    print(f"Failed to delete {target.name}: {e}")
+            
+            print(f"User signed out of Firefox profile: {profile.name}")
 
 if __name__ == "__main__":
-    deep_clean_browsers()
-    print("Cleanup complete. Users have been signed out.")
+    deep_clean_firefox()
+    print("\nFirefox cleanup successful. All accounts signed out.")
