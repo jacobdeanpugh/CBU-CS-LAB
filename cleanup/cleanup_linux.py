@@ -2,43 +2,36 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-import time
 
-def force_logout_firefox():
+def deep_clean_snap_firefox():
+    # The confirmed Snap path for Ubuntu
     home = Path.home()
-    user = os.getlogin()
+    firefox_path = home / "snap/firefox/common/.mozilla/firefox"
+    
+    print(f"Targeting Snap directory: {firefox_path}")
 
-    # 1. Kill EVERY possible Firefox process
-    # We use -9 (SIGKILL) to ensure it doesn't try to "save session" on exit
-    print("Forcefully closing all Firefox processes...")
-    subprocess.run(["pkill", "-9", "-u", user, "firefox"], stderr=subprocess.DEVNULL)
-    subprocess.run(["pkill", "-9", "-u", user, "firefox-bin"], stderr=subprocess.DEVNULL)
-    time.sleep(1) # Give the OS a second to release file locks
-
-    # 2. Define the path to the Firefox config
-    firefox_path = home / ".mozilla/firefox"
+    # 1. Kill Firefox processes (Forcefully)
+    # This prevents Firefox from writing the session back to disk on exit
+    subprocess.run(["pkill", "-9", "firefox"], stderr=subprocess.DEVNULL)
+    subprocess.run(["pkill", "-9", "firefox-bin"], stderr=subprocess.DEVNULL)
 
     if not firefox_path.exists():
-        print("Firefox directory not found.")
+        print("Error: Could not find the Firefox Snap directory.")
         return
 
-    # 3. Iterate through every profile folder
-    # Profiles usually end in .default or .default-release
+    # 2. Iterate through profiles
     for profile in firefox_path.glob("*"):
-        if profile.is_dir():
-            print(f"Cleaning profile: {profile.name}")
+        # We look for folders containing prefs.js to confirm it's a real profile
+        if profile.is_dir() and (profile / "prefs.js").exists():
+            print(f"Cleaning Profile: {profile.name}")
             
-            # The "Nuclear" list of files that keep users logged in
+            # These are the specific targets for a full logout
             targets = [
-                profile / "cookies.sqlite",
-                profile / "cookies.sqlite-wal",
-                profile / "cookies.sqlite-shm",
-                profile / "sessionstore.jsonlz4", # THE main session file
-                profile / "sessionstore-backups",   # Where Firefox hides recovery sessions
-                profile / "storage",               # Where Gemini/Google store "IndexedDB" tokens
-                profile / "webappsstore.sqlite",    # Local Storage
-                profile / "indexedDB",             # Older location for site data
-                profile / "permissions.sqlite"      # Site permissions/logins
+                profile / "storage",               # Wipes Gemini/Google tokens
+                profile / "cookies.sqlite",        # Wipes standard session cookies
+                profile / "sessionstore.jsonlz4",  # Prevents tab restoration
+                profile / "sessionstore-backups",  # Prevents recovery restoration
+                profile / "indexedDB"              # Wipes modern web database data
             ]
 
             for target in targets:
@@ -48,13 +41,15 @@ def force_logout_firefox():
                     else:
                         target.unlink(missing_ok=True)
                 except Exception as e:
-                    print(f"  [!] Could not delete {target.name}: {e}")
+                    print(f"  [!] Failed to delete {target.name}: {e}")
 
-    # 4. Clear the Cache root as well
-    cache_path = home / ".cache/mozilla/firefox"
-    if cache_path.exists():
-        shutil.rmtree(cache_path, ignore_errors=True)
+    # 3. Clear the Snap-specific cache folder
+    # Snaps often store heavy cache files here
+    snap_cache = home / "snap/firefox/common/.cache/mozilla/firefox"
+    if snap_cache.exists():
+        shutil.rmtree(snap_cache, ignore_errors=True)
+        print("Snap cache cleared.")
 
 if __name__ == "__main__":
-    force_logout_firefox()
-    print("\nDeep clean complete. Try opening Gemini now.")
+    deep_clean_snap_firefox()
+    print("\nLogout complete. You should be cleared from Gemini.")
