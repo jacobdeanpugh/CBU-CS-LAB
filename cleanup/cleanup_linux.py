@@ -3,53 +3,61 @@ import shutil
 import subprocess
 from pathlib import Path
 
-def deep_clean_snap_firefox():
-    # The confirmed Snap path for Ubuntu
+def sanatize_broswers():
     home = Path.home()
-    firefox_path = home / "snap/firefox/common/.mozilla/firefox"
     
-    print(f"Targeting Snap directory: {firefox_path}")
+    # 1. Kill everything
+    process_targets = [
+        "chrome", "google-chrome", "google-chrome-stable", "chromium", 
+        "brave", "msedge", "opera", "vivaldi", "chrome_crashpad"
+    ]
 
-    # 1. Kill Firefox processes (Forcefully)
-    # This prevents Firefox from writing the session back to disk on exit
-    subprocess.run(["pkill", "-9", "firefox"], stderr=subprocess.DEVNULL)
-    subprocess.run(["pkill", "-9", "firefox-bin"], stderr=subprocess.DEVNULL)
+    # 2. The Search Roots
+    search_roots = [
+        home / ".config",
+        home / ".cache",      # Cache is huge
+        home / ".local/share",
+        home / ".var/app", 
+        home / "snap"
+    ]
 
-    if not firefox_path.exists():
-        print("Error: Could not find the Firefox Snap directory.")
-        return
+    # 3. The "Nuclear" Target List
+    target_names = {
+        "Cookies", "cookies.sqlite", "Web Data", "History", "Login Data", 
+        "Local Storage", "Session Storage", "IndexedDB", "storage",
+        "Network", "Local State", "Preferences", "Sync Data", "GCM Store"
+    }
 
-    # 2. Iterate through profiles
-    for profile in firefox_path.glob("*"):
-        # We look for folders containing prefs.js to confirm it's a real profile
-        if profile.is_dir() and (profile / "prefs.js").exists():
-            print(f"Cleaning Profile: {profile.name}")
+    browser_keywords = ["chrome", "mozilla", "chromium", "brave", "opera", "microsoft-edge", "vivaldi"]
+
+    print(f"🔍 Executing Nuclear Scrub...")
+    
+    for root_path in search_roots:
+        if not root_path.exists(): continue
             
-            # These are the specific targets for a full logout
-            targets = [
-                profile / "storage",               # Wipes Gemini/Google tokens
-                profile / "cookies.sqlite",        # Wipes standard session cookies
-                profile / "sessionstore.jsonlz4",  # Prevents tab restoration
-                profile / "sessionstore-backups",  # Prevents recovery restoration
-                profile / "indexedDB"              # Wipes modern web database data
-            ]
+        for root, dirs, files in os.walk(root_path):
+            current_path = Path(root)
+            path_str = str(current_path).lower()
+            
+            # Ensure we are in a browser folder
+            if not any(key in path_str for key in browser_keywords):
+                continue
 
-            for target in targets:
-                try:
-                    if target.is_dir():
-                        shutil.rmtree(target, ignore_errors=True)
-                    else:
-                        target.unlink(missing_ok=True)
-                except Exception as e:
-                    print(f"  [!] Failed to delete {target.name}: {e}")
+            current_items = set(dirs) | set(files)
+            matches = target_names.intersection(current_items)
 
-    # 3. Clear the Snap-specific cache folder
-    # Snaps often store heavy cache files here
-    snap_cache = home / "snap/firefox/common/.cache/mozilla/firefox"
-    if snap_cache.exists():
-        shutil.rmtree(snap_cache, ignore_errors=True)
-        print("Snap cache cleared.")
+            for item in matches:
+                target_path = current_path / item
+                if target_path.exists():
+                    try:
+                        if target_path.is_dir():
+                            shutil.rmtree(target_path, ignore_errors=True)
+                        else:
+                            target_path.unlink(missing_ok=True)
+                        print(f"  [DESTROYED] -> {target_path}")
+                    except:
+                        pass
 
 if __name__ == "__main__":
-    deep_clean_snap_firefox()
-    print("\nLogout complete. You should be cleared from Gemini.")
+    sanatize_broswers() 
+    print("\nBrowser cleanup complete.")
