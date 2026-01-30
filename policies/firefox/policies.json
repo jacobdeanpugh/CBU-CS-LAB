@@ -1,0 +1,19 @@
+{
+  "policies": {
+    "AutofillAddressEnabled": false,
+    "AutofillCreditCardEnabled": false,
+    "BlockAboutAddons": true,
+    "BlockAboutConfig": true,
+    "BlockAboutProfiles": true,
+    "PrivateBrowsingModeAvailability": 2,
+    "SanitizeOnShutdown": {
+      "Cache": true,
+      "Cookies": true,
+      "FormData": true,
+      "History": true,
+      "Locked": false,
+      "Sessions": true,
+      "SiteSettings": true
+    }
+  }
+}
