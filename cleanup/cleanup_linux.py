@@ -3,7 +3,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-def sanatize_broswers():
+def sanatize_broswers(dry_run=False):
     home = Path.home()
     
     # 1. Kill everything
@@ -11,6 +11,10 @@ def sanatize_broswers():
         "chrome", "google-chrome", "google-chrome-stable", "chromium", 
         "brave", "msedge", "opera", "vivaldi", "chrome_crashpad"
     ]
+
+    if not dry_run:
+        for proc in process_targets:
+            subprocess.run(["pkill", "-f", proc], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # 2. The Search Roots
     search_roots = [
@@ -50,6 +54,10 @@ def sanatize_broswers():
                 target_path = current_path / item
                 if target_path.exists():
                     try:
+                        if dry_run:
+                            print(f"  [DRY RUN] -> {target_path}")
+                            continue
+
                         if target_path.is_dir():
                             shutil.rmtree(target_path, ignore_errors=True)
                         else:
